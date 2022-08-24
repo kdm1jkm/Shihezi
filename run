@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ ! -f ./venv/Scripts/python ] && [ ! -f ./venv/bin/python ]; then
+    echo "setting up environment..."
+    ./setup
+fi
+
+./venv/Scripts/python main.py

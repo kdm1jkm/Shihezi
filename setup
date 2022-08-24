@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if [ -e ./venv ]; then
+    rm -rf ./venv
+fi
+
+if [ -e python3 ]; then
+    python3 -m venv ./venv
+else
+    python -m venv ./venv
+fi
+
+if [ -f ./venv/Scripts/python ]; then
+    ./venv/Scripts/python -m pip install -r ./requirements.txt
+else
+    ./venv/bin/python -m pip install -r ./requirements.txt
+fi
