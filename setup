@@ -4,7 +4,9 @@ if [ -e ./venv ]; then
     rm -rf ./venv
 fi
 
-if [ ! command -v python &> /dev/null ]; then
+python3 --version &> /dev/null
+
+if [ $? = 0 ]; then 
     python3 -m venv ./venv
 else
     python -m venv ./venv
