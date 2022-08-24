@@ -26,58 +26,42 @@ import os
 FILE_NAME = "data"
 MONTH_RANGE = range(3, 8 + 1)
 TEAM = "MBC"
-OUTPUT_NAME = lambda: f"output/{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
+OUTPUT_NAME = (
+    lambda num: f"output/{datetime.now().strftime('%Y%m%d-%H%M%S')}-{num}.xlsx"
+)
 
 # TEAM = input("Enter team: ")
 
 
-def request2(data: pd.DataFrame, team=TEAM, month_range=MONTH_RANGE):
+def 득실점(data: pd.DataFrame, month_range=MONTH_RANGE):
     data = data.loc[data["month"].isin(month_range)]
 
-    def filter_req(data: pd.DataFrame, column: str):
-        data = data.loc[data[column] == team]
-        data = data[["scorelist", "year"]]
+    count: dict[str, dict[int, list[int]]] = defaultdict(
+        lambda: defaultdict(lambda: [0, 0])
+    )
 
-        count = defaultdict(lambda: [0, 0])
-        for index, row in data.iterrows():
-            odd_sum = 0
-            even_sum = 0
-            for i, num in enumerate(
-                row["scorelist"]
-                if type(row["scorelist"]) != int
-                else [row["scorelist"]]
-            ):
-                num = int(num)
-                if i % 2 == 0:
-                    even_sum += num
-                else:
-                    odd_sum += num
+    for _, row in data.iterrows():
+        scores = (
+            row["scorelist"]
+            if isinstance(row["scorelist"], list)
+            else [row["scorelist"]]
+        )
+        for i, score in enumerate(map(int, scores)):
+            if i % 2 == 0:
+                count[row["홈팀"]][row["year"]][0] += score
+                count[row["방문팀"]][row["year"]][1] += score
+            else:
+                count[row["홈팀"]][row["year"]][1] += score
+                count[row["방문팀"]][row["year"]][0] += score
 
-            count[int(row["year"])][0] += odd_sum
-            count[int(row["year"])][1] += even_sum
+    result: dict[str, list[tuple[int, int, int]]] = dict()
+    for k, v in count.items():
+        result[k] = [(nk, nv[0], nv[1]) for nk, nv in v.items()]
 
-        return list(map(lambda item: (item[0], *item[1]), count.items()))
-
-    h_data = filter_req(data, "홈팀")
-    a_data = filter_req(data, "방문팀")
-
-    data_1 = defaultdict(lambda: 0)
-    data_2 = defaultdict(lambda: 0)
-
-    for h in h_data:
-        data_1[h[0]] += h[2]
-        data_2[h[0]] += h[1]
-    for a in a_data:
-        data_1[a[0]] += a[1]
-        data_2[a[0]] += a[2]
-
-    def convert(d):
-        return list(map(lambda item: (item[0], item[1]), d.items()))
-
-    return convert(data_1), convert(data_2)
+    return result
 
 
-def request1(data: pd.DataFrame, month_range=MONTH_RANGE) -> dict:
+def 승패횟수(data: pd.DataFrame, month_range=MONTH_RANGE):
     data = data.loc[data["month"].isin(month_range)]
 
     홈 = data.loc[data["승"] == "H"]
@@ -89,10 +73,7 @@ def request1(data: pd.DataFrame, month_range=MONTH_RANGE) -> dict:
     홈_패배 = 원정.rename(columns={"홈팀": "팀"})
     원정_패배 = 홈.rename(columns={"방문팀": "팀"})
 
-    def restructure_frame(data):
-        return data[["팀", "year"]]
-
-    count: dict[str, dict[int, list[int, int]]] = defaultdict(
+    count: dict[str, dict[int, list[int]]] = defaultdict(
         lambda: defaultdict(lambda: [0, 0])
     )
 
@@ -104,7 +85,7 @@ def request1(data: pd.DataFrame, month_range=MONTH_RANGE) -> dict:
         for _, row in 패배.iterrows():
             count[row["팀"]][row["year"]][1] += 1
 
-    result = dict()
+    result: dict[str, list[tuple[int, int, int]]] = dict()
     for k, v in count.items():
         result[k] = [(nk, nv[0], nv[1]) for nk, nv in v.items()]
 
@@ -116,47 +97,49 @@ def main():
     with open(FILE_NAME, "rb") as f:
         data = pd.DataFrame(pickle.load(f))
 
-    # 원하는 결과 처라
-    results = [None for _ in range(4)]
-    results[0], results[1] = request1(data)
-    results[2], results[3] = request2(data)
+    result1 = 승패횟수(data)
+    result2 = 득실점(data)
 
     # 파일로 저장
-    wb = openpyxl.Workbook()
+    if not os.path.isdir("./output"):
+        os.mkdir("./output")
 
     def write_excel(ws, data):
         for d in data:
             ws.append(d)
 
-    ws = wb.active
-    ws.title = "행 개수"
-    ws.append(["팀", "행 개수1"])
-    write_excel(ws, results[0])
+    wb = openpyxl.Workbook()
 
-    ws = wb.create_sheet("행 개수2")
-    ws.append(["팀", "행 개수"])
-    write_excel(ws, results[1])
+    for k, v in result1.items():
+        ws = wb.create_sheet(str(k))
+        ws.append(["팀", "승리", "패배"])
+        write_excel(ws, v)
 
-    ws = wb.create_sheet("합계1")
-    ws.append(["년도", "합"])
-    write_excel(ws, results[2])
+    del wb["Sheet"]
+    wb.save(OUTPUT_NAME(1))
 
-    ws = wb.create_sheet("합계2")
-    ws.append(["년도", "합"])
-    write_excel(ws, results[3])
+    wb = openpyxl.Workbook()
 
-    if not os.path.isdir("./output"):
-        os.mkdir("./output")
+    for k, v in result2.items():
+        ws = wb.create_sheet(str(k))
+        ws.append(["팀", "득점", "실점"])
+        write_excel(ws, v)
 
-    wb.save(OUTPUT_NAME())
+    del wb["Sheet"]
+    wb.save(OUTPUT_NAME(2))
 
     # pandas로 나타내기
-    dfs = list(map(pd.DataFrame, results))
-    dfs[0].columns = ["팀", "행 개수"]
-    dfs[1].columns = ["팀", "행 개수"]
-    dfs[2].columns = ["년도", "합"]
-    dfs[3].columns = ["년도", "합"]
-    print(*dfs, sep="\n=========\n")
+    frame1 = [
+        f'{k}\n{pd.DataFrame(v, columns=["연도", "승리", "패배"])}'
+        for k, v in result1.items()
+    ]
+    frame2 = [
+        f'{k}\n{pd.DataFrame(v, columns=["연도", "득점", "실점"])}'
+        for k, v in result2.items()
+    ]
+    print(*frame1, sep="\n=========\n")
+    print("*****************************************************")
+    print(*frame2, sep="\n=========\n")
 
 
 if __name__ == "__main__":
