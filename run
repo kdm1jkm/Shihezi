@@ -5,4 +5,8 @@ if [ ! -f ./venv/Scripts/python ] && [ ! -f ./venv/bin/python ]; then
     ./setup
 fi
 
-./venv/Scripts/python main.py
+if [ -f ./venv/Scripts/python ]; then
+    ./venv/Scripts/python ./main.py
+else
+    ./venv/bin/python ./main.py
+fi
